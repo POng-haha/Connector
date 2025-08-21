@@ -1,119 +1,78 @@
 package domain
 
-import (
-	"fmt"
-	"time"
-)
-
-type AppError struct {
-	Code    string
-	Message string
-	Err     error
-}
-
-func (e *AppError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Err)
-	}
-	return e.Message
-}
-func (e *AppError) Unwrap() error {
-	return e.Err
-}
-
-var (
-	ErrNotFound       = &AppError{Code: "SVC404", Message: "Resource not found"}
-	ErrValidation     = &AppError{Code: "VAL400", Message: "Invalid input provided"}
-	ErrServiceDown    = &AppError{Code: "SYS001", Message: "System unavailable"}
-	ErrConfig         = &AppError{Code: "CFG500", Message: "Application configuration error"}
-	ErrUnauthorized   = &AppError{Code: "SEC001", Message: "Unauthorized"}
-	ErrForbidden      = &AppError{Code: "SEC002", Message: "Permission denied"}
-	ErrInternalServer = &AppError{Code: "SYS500", Message: "An unexpected internal error occurred"}
-)
-
-type ErrorResponse struct {
-	ErrorCode    string    `json:"ErrorCode"`
-	ErrorMessage string    `json:"ErrorMessage"`
-	Status       int       `json:"Status"`
-	Timestamp    time.Time `json:"Timestamp"`
-	RequestID    string    `json:"Request_ID"`
-}
-
-type ValidationErrorDetail struct {
-	Field   string `json:"field"`
-	Tag     string `json:"tag"`
-	Message string `json:"message"`
-}
-
-type GetCustomerInfoRequest struct {
-	IDCardNo 	string `json:"idcardno"`
-	AeonID 		string `json:"aeonid"`
-	AgreementNo string `json:"agreementno"`
-}
-
-type GetCustomerInfoResponse struct {
-	AeonID			string `json:"aeonid"`
-	CustomerNameENG string `json:"customernameeng"`
-	CustomerNameTH  string `json:"customernameth"`
-	Sex				string `json:"sex"`
-	MobileNo		string `json:"mobileno"`
-	Email			string `json:"email"`
-	Nationality		string `json:"nationality"`
-	DateofBirth		string `json:"dateofbirth"`
-	MemberStatus	string `json:"memberstatus"`
-}
-
-type UpdateAddressRequest struct {
-	CustomerID string  `json:"customerId" validate:"required,uuid4"`
-	Address    Address `json:"address" validate:"required"`
-}
-
-// UpdateAddressRequest - nested structure for address details
-type Address struct {
-	Street     string `json:"street" validate:"required"`
-	City       string `json:"city" validate:"required"`
-	PostalCode string `json:"postalCode" validate:"required,len=5"`
-}
-
-type UpdateAddressResponse struct {
-	Message string `json:"message"`
-	Success bool   `json:"success"`
-}
-
-type GetCustomerInfo004Request struct {
-	IDCardNo 	string `json:"idcardno"`
-	AeonID 		string `json:"aeonid"`
-	AgreementNo string `json:"agreementno"`
-}
-
-type GetCustomerInfo004Response struct {
-	AeonID			string `json:"aeonid"`
-	CustomerNameENG string `json:"customernameeng"`
-	CustomerNameTH  string `json:"customernameth"`
-	Sex				string `json:"sex"`
-	MobileNo		string `json:"mobileno"`
-	Email			string `json:"email"`
-	Nationality		string `json:"nationality"`
-	DateofBirth		string `json:"dateofbirth"`
-	MemberStatus	string `json:"memberstatus"`
-}
-
+//Collection Dept Mediation service
 type CollectionDetailRequest struct {
-	CustomerID string  `json:"customerId" validate:"required,uuid4"`
-	Address    Address `json:"address" validate:"required"`
+	IDCardNo            string `json:"IDCardNo"       validate:"required,max=20"`
+	RedCaseNo 			string `json:"RedCaseNo"      validate:"max=15"`
+	BlackCaseNo 		string `json:"BlackCaseNo"    validate:"max=15"`
 }
 
 type CollectionDetailResponse struct {
-	CustomerID string  `json:"customerId" validate:"required,uuid4"`
-	Address    Address `json:"address" validate:"required"`
+	IDCardNo            string	                      `json:"IDCardNo"` 
+	NoOfAgreement       int 	                      `json:"NoOfAgreement"`
+	AgreementList       []CollectionDetailAgreement   `json:"AgreementList"`
+}
+
+// type CollectionDetailResponse struct - nested structure for Collection details
+type CollectionDetailAgreement struct {
+	AgreementNo     			string 	`json:"AgreementNo"`
+	SeqOfAgreement      		int 	`json:"SeqOfAgreement"`
+	OutsourceID 				string 	`json:"OutsourceID"`
+	OutsourceName     			string 	`json:"OutsourceName"`
+	BlockCode      				string 	`json:"BlockCode"`
+	CurrentSUEOSPrincipalNet 	float64 `json:"CurrentSUEOSPrincipalNet"`
+	CurrentSUEOSPrincipalVAT    float64 `json:"CurrentSUEOSPrincipalVAT"`
+	CurrentSUEOSInterestNet     float64 `json:"CurrentSUEOSInterestNet"`
+	CurrentSUEOSInterestVAT 	float64 `json:"CurrentSUEOSInterestVAT"`
+	CurrentSUEOSPenalty     	float64 `json:"CurrentSUEOSPenalty"`
+	CurrentSUEOSHDCharge      	float64 `json:"CurrentSUEOSHDCharge"`
+	CurrentSUEOSOtherFee 		float64 `json:"CurrentSUEOSOtherFee"`
+	CurrentSUEOSTotal     		float64 `json:"CurrentSUEOSTotal"`
+	TotalPaymentAmount      	float64 `json:"TotalPaymentAmount"`
+	LastPaymentDate 			int 	`json:"LastPaymentDate"`
+	SUESeqNo     				int 	`json:"SUESeqNo"`
+	BeginSUEOSPrincipalNet      float64 `json:"BeginSUEOSPrincipalNet"`
+	BeginSUEOSPrincipalVAT 		float64 `json:"BeginSUEOSPrincipalVAT"`
+	BeginSUEOSInterestNet     	float64 `json:"BeginSUEOSInterestNet"`
+	BeginSUEOSInterestVAT      	float64 `json:"BeginSUEOSInterestVAT"`
+	BeginSUEOSPenalty 			float64 `json:"BeginSUEOSPenalty"`
+	BeginSUEOSHDCharge     		float64 `json:"BeginSUEOSHDCharge"`
+	BeginSUEOSOtherFee     		float64 `json:"BeginSUEOSOtherFee"`
+	BeginSUEOSTotal 			float64 `json:"BeginSUEOSTotal"`
+	SUEStatus     				int		`json:"SUEStatus"`
+	SUEStatusDescription      	string 	`json:"SUEStatusDescription"`
+	BlackCaseNo 				string 	`json:"BlackCaseNo"`
+	BlackCaseDate     			int		`json:"BlackCaseDate"`
+	RedCaseNo      				string 	`json:"RedCaseNo"`
+	RedCaseDate 				int		`json:"RedCaseDate"`
+	CourtCode     				string 	`json:"CourtCode"`
+	CourtName      				string 	`json:"CourtName"`
+	JudgmentDate 				int 	`json:"JudgmentDate"`
+	JudgmentResultCode     		int 	`json:"JudgmentResultCode"`
+	JudgmentResultDescription   string 	`json:"JudgmentResultDescription"`
+	JudgmentDetail 				string 	`json:"JudgmentDetail"`
+	ExpectDate     				int 	`json:"ExpectDate"`
+	AssetPrice      			float64 `json:"AssetPrice"`
+	JudgeAmount 				float64 `json:"JudgeAmount"`
+	NoOfInstallment     		string 	`json:"NoOfInstallment"`
+	InstallmentAmount      		float64 `json:"InstallmentAmount"`
+	TotalCurrentPerSUESeqNo 	float64 `json:"TotalCurrentPerSUESeqNo"`
 }
 
 type CollectionLogRequest struct {
-	CustomerID string  `json:"customerId" validate:"required,uuid4"`
-	Address    Address `json:"address" validate:"required"`
+	AgreementNo         string `json:"AgreementNo"  validate:"required,max=16"`
+	RemarkCode          string `json:"RemarkCode"   validate:"required,max=4"`
+	LogRemark1 			string `json:"LogRemark1"   validate:"max=120"`
+	LogRemark2     		string `json:"LogRemark2"   validate:"max=120"`
+	LogRemark3       	string `json:"LogRemark3"   validate:"max=120"`
+	LogRemark4 			string `json:"LogRemark4"   validate:"max=120"`
+	LogRemark5     		string `json:"LogRemark5"   validate:"max=120"`
+	InputDate           string `json:"InputDate"    validate:"required,max=12"`
+	InputTime           string `json:"InputTime"    validate:"required,max=6"`
+	OperatorID          string `json:"OperatorID"   validate:"required,max=15"`
 }
 
 type CollectionLogResponse struct {
-	CustomerID string  `json:"customerId" validate:"required,uuid4"`
-	Address    Address `json:"address" validate:"required"`
+	IDCardNo 			string  `json:"IDCardNo"`
+	AgreementNo 		string  `json:"AgreementNo"`	
 }
