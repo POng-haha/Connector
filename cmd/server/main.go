@@ -1,182 +1,227 @@
-<?xml version="1.0" encoding="utf-8"?>
-<wsdl:definitions xmlns:soap12="http://schemas.xmlsoap.org/wsdl/soap12/" xmlns:s="http://www.w3.org/2001/XMLSchema" xmlns:tm="http://microsoft.com/wsdl/mime/textMatching/" xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:http="http://schemas.xmlsoap.org/wsdl/http/" xmlns:tns="http://tempuri.org/" xmlns:mime="http://schemas.xmlsoap.org/wsdl/mime/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" targetNamespace="http://tempuri.org/" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
-  <wsdl:types>
-    <s:schema elementFormDefault="qualified" targetNamespace="http://tempuri.org/">
-      <s:element name="CheckCardByLaser">
-        <s:complexType>
-          <s:sequence>
-            <s:element minOccurs="0" maxOccurs="1" name="PID" type="s:string" />
-            <s:element minOccurs="0" maxOccurs="1" name="FirstName" type="s:string" />
-            <s:element minOccurs="0" maxOccurs="1" name="LastName" type="s:string" />
-            <s:element minOccurs="0" maxOccurs="1" name="BirthDay" type="s:string" />
-            <s:element minOccurs="0" maxOccurs="1" name="Laser" type="s:string" />
-          </s:sequence>
-        </s:complexType>
-      </s:element>
-      <s:element name="CheckCardByLaserResponse">
-        <s:complexType>
-          <s:sequence>
-            <s:element minOccurs="0" maxOccurs="1" name="CheckCardByLaserResult" type="tns:CardStatusOut" />
-          </s:sequence>
-        </s:complexType>
-      </s:element>
-      <s:complexType name="CardStatusOut">
-        <s:complexContent mixed="false">
-          <s:extension base="tns:ResponseOut">
-            <s:sequence>
-              <s:element minOccurs="1" maxOccurs="1" name="Code" type="s:unsignedShort" />
-              <s:element minOccurs="0" maxOccurs="1" name="Desc" type="s:string" />
-            </s:sequence>
-          </s:extension>
-        </s:complexContent>
-      </s:complexType>
-      <s:complexType name="ResponseOut">
-        <s:sequence>
-          <s:element minOccurs="1" maxOccurs="1" name="IsError" type="s:boolean" />
-          <s:element minOccurs="0" maxOccurs="1" name="ErrorMessage" type="s:string" />
-        </s:sequence>
-      </s:complexType>
-      <s:element name="CheckCardByCID">
-        <s:complexType>
-          <s:sequence>
-            <s:element minOccurs="0" maxOccurs="1" name="ChipNo" type="s:string" />
-            <s:element minOccurs="0" maxOccurs="1" name="pid" type="s:string" />
-            <s:element minOccurs="0" maxOccurs="1" name="bp1no" type="s:string" />
-          </s:sequence>
-        </s:complexType>
-      </s:element>
-      <s:element name="CheckCardByCIDResponse">
-        <s:complexType>
-          <s:sequence>
-            <s:element minOccurs="0" maxOccurs="1" name="CheckCardByCIDResult" type="tns:CardStatusOut" />
-          </s:sequence>
-        </s:complexType>
-      </s:element>
-      <s:element name="CardStatusOut" nillable="true" type="tns:CardStatusOut" />
-    </s:schema>
-  </wsdl:types>
-  <wsdl:message name="CheckCardByLaserSoapIn">
-    <wsdl:part name="parameters" element="tns:CheckCardByLaser" />
-  </wsdl:message>
-  <wsdl:message name="CheckCardByLaserSoapOut">
-    <wsdl:part name="parameters" element="tns:CheckCardByLaserResponse" />
-  </wsdl:message>
-  <wsdl:message name="CheckCardByCIDSoapIn">
-    <wsdl:part name="parameters" element="tns:CheckCardByCID" />
-  </wsdl:message>
-  <wsdl:message name="CheckCardByCIDSoapOut">
-    <wsdl:part name="parameters" element="tns:CheckCardByCIDResponse" />
-  </wsdl:message>
-  <wsdl:message name="CheckCardByLaserHttpGetIn">
-    <wsdl:part name="PID" type="s:string" />
-    <wsdl:part name="FirstName" type="s:string" />
-    <wsdl:part name="LastName" type="s:string" />
-    <wsdl:part name="BirthDay" type="s:string" />
-    <wsdl:part name="Laser" type="s:string" />
-  </wsdl:message>
-  <wsdl:message name="CheckCardByLaserHttpGetOut">
-    <wsdl:part name="Body" element="tns:CardStatusOut" />
-  </wsdl:message>
-  <wsdl:message name="CheckCardByCIDHttpGetIn">
-    <wsdl:part name="ChipNo" type="s:string" />
-    <wsdl:part name="pid" type="s:string" />
-    <wsdl:part name="bp1no" type="s:string" />
-  </wsdl:message>
-  <wsdl:message name="CheckCardByCIDHttpGetOut">
-    <wsdl:part name="Body" element="tns:CardStatusOut" />
-  </wsdl:message>
-  <wsdl:portType name="CheckCardBankServiceSoap">
-    <wsdl:operation name="CheckCardByLaser">
-      <wsdl:input message="tns:CheckCardByLaserSoapIn" />
-      <wsdl:output message="tns:CheckCardByLaserSoapOut" />
-    </wsdl:operation>
-    <wsdl:operation name="CheckCardByCID">
-      <wsdl:input message="tns:CheckCardByCIDSoapIn" />
-      <wsdl:output message="tns:CheckCardByCIDSoapOut" />
-    </wsdl:operation>
-  </wsdl:portType>
-  <wsdl:portType name="CheckCardBankServiceHttpGet">
-    <wsdl:operation name="CheckCardByLaser">
-      <wsdl:input message="tns:CheckCardByLaserHttpGetIn" />
-      <wsdl:output message="tns:CheckCardByLaserHttpGetOut" />
-    </wsdl:operation>
-    <wsdl:operation name="CheckCardByCID">
-      <wsdl:input message="tns:CheckCardByCIDHttpGetIn" />
-      <wsdl:output message="tns:CheckCardByCIDHttpGetOut" />
-    </wsdl:operation>
-  </wsdl:portType>
-  <wsdl:binding name="CheckCardBankServiceSoap" type="tns:CheckCardBankServiceSoap">
-    <soap:binding transport="http://schemas.xmlsoap.org/soap/http" />
-    <wsdl:operation name="CheckCardByLaser">
-      <soap:operation soapAction="http://tempuri.org/CheckCardByLaser" style="document" />
-      <wsdl:input>
-        <soap:body use="literal" />
-      </wsdl:input>
-      <wsdl:output>
-        <soap:body use="literal" />
-      </wsdl:output>
-    </wsdl:operation>
-    <wsdl:operation name="CheckCardByCID">
-      <soap:operation soapAction="http://tempuri.org/CheckCardByCID" style="document" />
-      <wsdl:input>
-        <soap:body use="literal" />
-      </wsdl:input>
-      <wsdl:output>
-        <soap:body use="literal" />
-      </wsdl:output>
-    </wsdl:operation>
-  </wsdl:binding>
-  <wsdl:binding name="CheckCardBankServiceSoap12" type="tns:CheckCardBankServiceSoap">
-    <soap12:binding transport="http://schemas.xmlsoap.org/soap/http" />
-    <wsdl:operation name="CheckCardByLaser">
-      <soap12:operation soapAction="http://tempuri.org/CheckCardByLaser" style="document" />
-      <wsdl:input>
-        <soap12:body use="literal" />
-      </wsdl:input>
-      <wsdl:output>
-        <soap12:body use="literal" />
-      </wsdl:output>
-    </wsdl:operation>
-    <wsdl:operation name="CheckCardByCID">
-      <soap12:operation soapAction="http://tempuri.org/CheckCardByCID" style="document" />
-      <wsdl:input>
-        <soap12:body use="literal" />
-      </wsdl:input>
-      <wsdl:output>
-        <soap12:body use="literal" />
-      </wsdl:output>
-    </wsdl:operation>
-  </wsdl:binding>
-  <wsdl:binding name="CheckCardBankServiceHttpGet" type="tns:CheckCardBankServiceHttpGet">
-    <http:binding verb="GET" />
-    <wsdl:operation name="CheckCardByLaser">
-      <http:operation location="/CheckCardByLaser" />
-      <wsdl:input>
-        <http:urlEncoded />
-      </wsdl:input>
-      <wsdl:output>
-        <mime:mimeXml part="Body" />
-      </wsdl:output>
-    </wsdl:operation>
-    <wsdl:operation name="CheckCardByCID">
-      <http:operation location="/CheckCardByCID" />
-      <wsdl:input>
-        <http:urlEncoded />
-      </wsdl:input>
-      <wsdl:output>
-        <mime:mimeXml part="Body" />
-      </wsdl:output>
-    </wsdl:operation>
-  </wsdl:binding>
-  <wsdl:service name="CheckCardBankService">
-    <wsdl:port name="CheckCardBankServiceSoap" binding="tns:CheckCardBankServiceSoap">
-      <soap:address location="https://idcard.bora.dopa.go.th/CheckCardStatus/CheckCardService.asmx" />
-    </wsdl:port>
-    <wsdl:port name="CheckCardBankServiceSoap12" binding="tns:CheckCardBankServiceSoap12">
-      <soap12:address location="https://idcard.bora.dopa.go.th/CheckCardStatus/CheckCardService.asmx" />
-    </wsdl:port>
-    <wsdl:port name="CheckCardBankServiceHttpGet" binding="tns:CheckCardBankServiceHttpGet">
-      <http:address location="https://idcard.bora.dopa.go.th/CheckCardStatus/CheckCardService.asmx" />
-    </wsdl:port>
-  </wsdl:service>
-</wsdl:definitions>
+package service
+
+import (
+	"connectorapi-go/internal/adapter/client"
+	"connectorapi-go/internal/adapter/utils"
+	"connectorapi-go/internal/core/domain"
+	"connectorapi-go/internal/core/service/format"
+	"connectorapi-go/pkg/config"
+	"fmt"
+	"strings"
+
+	app_error "connectorapi-go/pkg/error"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+)
+
+// TCPSocketClient defines the interface for a TCP socket client
+type collectionTCPSocketClient = client.TCPSocketClient
+
+// CollectionService implements the business logic for customer-related features
+type CollectionService struct {
+	config       *config.Config
+	logger       *zap.SugaredLogger
+	tcpClient    client.TCPSocketClient
+	routes       map[string]config.Route
+	destinations map[string]config.Destination
+}
+
+// NewCollectionService creates a new instance of CustomerService.
+func NewCollectionService(
+	cfg *config.Config,
+	logger *zap.SugaredLogger,
+	tcpClient collectionTCPSocketClient,
+	routes map[string]config.Route,
+	destinations map[string]config.Destination,
+) *CollectionService {
+	return &CollectionService{
+		config:       cfg,
+		logger:       logger,
+		tcpClient:    tcpClient,
+		routes:       routes,
+		destinations: destinations,
+	}
+}
+
+// CollectionDetail handles the CollectionDetail request
+// It sends a request to the TCP service and returns the response.
+func (s *CollectionService) CollectionDetail(c *gin.Context, reqData domain.CollectionDetailRequest) (*domain.CollectionDetailResponse, *app_error.AppError) {
+	//const routeKey = "POST:/Api/Collection/CollectionDetail"
+	routeKey := utils.GetRouteKey(c)
+	const destinationName = "systemI"
+	//var logLine string
+
+	idValue, _ := c.Get("Api-RequestID")
+	apiRequestID, ok := idValue.(string)
+	if !ok {
+		apiRequestID = ""
+	}
+
+	route, ok := s.routes[routeKey]
+	if !ok {
+		s.logger.Errorw("Route configuration not found for TCP service", "routeKey", routeKey)
+		return nil, app_error.ErrConfig
+	}
+
+	destination, ok := s.destinations[destinationName]
+	if !ok {
+		s.logger.Errorw("TCP Destination configuration not found", "destinationName", destinationName)
+		return nil, app_error.ErrConfig
+	}
+	if destination.Type != "tcp" {
+		s.logger.Errorw("Destination type is not TCP", "destinationName", destinationName, "type", destination.Type)
+		return nil, app_error.ErrConfig
+	}
+
+	portList, ok := destination.Ports["CollectionDetail"]
+	if !ok || len(portList) == 0 {
+		s.logger.Errorw("Invalid port configuration", "port", portList)
+		return nil, app_error.ErrConfig
+	}
+	port := utils.RandomPortFromList(portList)
+	if port == "" {
+		s.logger.Errorw("Invalid port configuration", "port", portList)
+		return nil, app_error.ErrConfig
+	}
+
+	tcpAddress := fmt.Sprintf("%s:%s", destination.IP, port)
+
+	formattedRequestID := utils.PadOrTruncate(apiRequestID, 20)
+	fixedLengthData := format.FormatCollectionDetailRequest(reqData)
+
+	header := utils.BuildFixedLengthHeader(
+		route.System,
+		route.Service,
+		route.Format,
+		formattedRequestID,
+		route.RequestLength,
+	)
+
+	combinedPayloadString := header + fixedLengthData
+
+	s.logger.Info("Sending TCP request payload : ", combinedPayloadString)
+
+	responseStr, err := s.tcpClient.SendAndReceive(tcpAddress, combinedPayloadString)
+	if err != nil {
+		s.logger.Errorw("Downstream TCP service call failed", "error", err, "address", tcpAddress)
+		return nil, app_error.ErrService
+	}
+
+	// Check if the response contains an error
+	errorCode := strings.TrimSpace(responseStr[67:73])
+	errorMessage := strings.TrimSpace(responseStr[73:123])
+
+	switch errorCode {
+	case "SVC105":
+		return nil, app_error.ErrRequiedParam
+	case "SVC117":
+		return nil, app_error.ErrIDCardNotFound
+	case "SVC902":
+		return nil, app_error.ErrSystemI
+	case "SVC203":
+		return nil, app_error.ErrSUEInfoNotFound
+	default:
+    	if errorCode != "" {
+        	s.logger.Info("Unknown error code from System I : ",
+         	   "code", errorCode,
+          	  "message", errorMessage,
+        	)
+        	return nil, app_error.ErrSystemIUnexpect
+    	}
+	}
+
+	s.logger.Info("Received downstream TCP response", "response", string(responseStr))
+
+	response, _ := format.FormatCollectionDetailResponse(responseStr)
+	return &response, nil
+}
+
+// CollectionLog handles the logic for logging collection data via TCP.
+// It sends a request to the TCP service and returns the response.
+func (s *CollectionService) CollectionLog(c *gin.Context, reqData domain.CollectionLogRequest) (*domain.CollectionLogResponse, *app_error.AppError) {
+	//const routeKey = "POST:/Api/Collection/CollectionLog"
+	routeKey := utils.GetRouteKey(c)
+	const destinationName = "systemI"
+
+	idValue, _ := c.Get("Api-RequestID")
+	apiRequestID, ok := idValue.(string)
+	if !ok {
+		apiRequestID = ""
+	}
+
+	route, ok := s.routes[routeKey]
+	if !ok {
+		s.logger.Errorw("Route configuration not found for TCP service", "routeKey", routeKey)
+		return nil, app_error.ErrConfig
+	}
+
+	destination, ok := s.destinations[destinationName]
+	if !ok {
+		s.logger.Errorw("TCP Destination configuration not found", "destinationName", destinationName)
+		return nil, app_error.ErrConfig
+	}
+	if destination.Type != "tcp" {
+		s.logger.Errorw("Destination type is not TCP", "destinationName", destinationName, "type", destination.Type)
+		return nil, app_error.ErrConfig
+	}
+
+	portList, ok := destination.Ports["CollectionDetail"]
+	if !ok || len(portList) == 0 {
+		s.logger.Errorw("Invalid port configuration", "port", portList)
+		return nil, app_error.ErrConfig
+	}
+	port := utils.RandomPortFromList(portList)
+	if port == "" {
+		s.logger.Errorw("Invalid port configuration", "port", portList)
+		return nil, app_error.ErrConfig
+	}
+
+	tcpAddress := fmt.Sprintf("%s:%s", destination.IP, port)
+
+	formattedRequestID := utils.PadOrTruncate(apiRequestID, 20)
+	fixedLengthData := format.FormatCollectionLogRequest(reqData)
+
+	header := utils.BuildFixedLengthHeader(
+		route.System,
+		route.Service,
+		route.Format,
+		formattedRequestID,
+		route.RequestLength,
+	)
+
+	combinedPayloadString := header + fixedLengthData
+	s.logger.Info("Sending TCP request payload", "payload", combinedPayloadString)
+
+	responseStr, err := s.tcpClient.SendAndReceive(tcpAddress, combinedPayloadString)
+	if err != nil {
+		s.logger.Errorw("Downstream TCP service call failed", "error", err, "address", tcpAddress)
+		return nil, app_error.ErrService
+	}
+
+	// Check if the response contains an error
+	errorCode := strings.TrimSpace(responseStr[67:73])
+	errorMessage := strings.TrimSpace(responseStr[73:123])
+
+	switch errorCode {
+	case "SVC216", "SVC235", "SVC342", "SVC343", "SCV344":
+		return nil, app_error.ErrRequiedParam
+	case "SVC236":
+		return nil, app_error.ErrAgmNoNotFound
+	case "SVC902":
+		return nil, app_error.ErrSystemI
+	default:
+    	if errorCode != "" {
+        	s.logger.Info("Unknown error code from System I : ",
+         	   "code", errorCode,
+          	  "message", errorMessage,
+        	)
+        	return nil, app_error.ErrSystemIUnexpect
+    	}
+	}
+
+	s.logger.Debugw("Received downstream TCP response", "response", string(responseStr))
+
+	response, _:= format.FormatCollectionLogResponse(responseStr)
+	return &response, nil
+}
