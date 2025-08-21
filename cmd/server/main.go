@@ -1,14 +1,12 @@
 package handler
 
 import (
-	// "fmt"
+	"fmt"
 	"net/http"
-	"time"
+	"strings"
 
-	"picoapi-go/internal/core/domain"
-	"picoapi-go/internal/adapter/utils"
-	"picoapi-go/pkg/config"
-	app_error "picoapi-go/pkg/error"
+	app_error "connectorapi-go/pkg/error"
+	"connectorapi-go/internal/adapter/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -16,102 +14,128 @@ import (
 	"go.uber.org/zap"
 )
 
-// DopaService defines the interface
-type DopaService interface {
-	CheckDOPA(c *gin.Context, checkDOPARq domain.CheckDOPARequest) domain.CheckDOPAResponse
+// --- Helper struct & function ---
+type apiHeaders struct {
+	APIKey    string
+	RequestID string
+	Channel   string
+	DeviceOS  string
 }
 
-// DopaHandler handles all customer-related API requests
-type DopaHandler struct {
-	service   DopaService
-	validator *validator.Validate
-	logger    *zap.SugaredLogger
-	config    *config.Config
-	repo 	  *utils.APIKeyRepository
+func handleErrorResponse(c *gin.Context, appErr *app_error.AppError) {
+	statusCode := http.StatusInternalServerError
+	switch appErr.Code {
+	case app_error.ErrValidation.Code,
+		app_error.ErrRequiedParam.Code,
+		app_error.ErrApiChannel.Code,
+		app_error.ErrApiRequestID.Code,
+		app_error.ErrApiDeviceOS.Code,
+		app_error.ErrIDCardNotFound.Code,
+		app_error.ErrSUEInfoNotFound.Code,
+		app_error.ErrAgmNoNotFound.Code,
+		app_error.ErrService.Code,
+		app_error.ErrSystemI.Code,
+		app_error.ErrSystemIUnexpect.Code:
+		statusCode = http.StatusBadRequest
+	case app_error.ErrUnauthorized.Code:
+		statusCode = http.StatusUnauthorized
+	case app_error.ErrForbidden.Code:
+		statusCode = http.StatusForbidden
+	case app_error.ErrNotFound.Code:
+		statusCode = http.StatusNotFound
+	case app_error.ErrService.Code:
+		statusCode = http.StatusBadGateway
+	case app_error.ErrTimeOut.Code:
+		statusCode = http.StatusGatewayTimeout
+	}
+
+	errResponse := app_error.ErrorResponse{
+		ErrorCode:    appErr.Code,
+		ErrorMessage: appErr.Message,
+	}
+
+	c.JSON(statusCode, errResponse)
 }
 
-// NewDopaHandler creates a new instance of CommonHandler
-func NewDopaHandler(s DopaService, logger *zap.SugaredLogger, cfg *config.Config, repo *utils.APIKeyRepository) *DopaHandler {
-	return &DopaHandler{
-		service:   s,
-		validator: validator.New(),
-		logger:    logger,
-		config:    cfg,
-		repo:	   repo,
+func getAPIHeaders(c *gin.Context) apiHeaders {
+	return apiHeaders{
+		APIKey:    c.GetHeader("Api-Key"),
+		RequestID: c.GetHeader("Api-RequestID"),
+		Channel:   c.GetHeader("Api-Channel"),
+		DeviceOS:  c.GetHeader("Api-DeviceOS"),
 	}
 }
 
-// RegisterRoutes registers all routes related to customers to the router group
-func (h *DopaHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	customerRoutes := rg.Group("/Customer")
-	{
-		customerRoutes.POST("/CheckDOPA", h.CheckDOPA)
+func ValidateHeadersAndAuth(c *gin.Context, method string, path string, apiKeyRepo *utils.APIKeyRepository, logger *zap.SugaredLogger) *app_error.AppError {
+	headers := getAPIHeaders(c)
+
+	if !apiKeyRepo.Validate(headers.APIKey, method, path) {
+		logger.Warnw("Authorization failed", "path", path, "apiKey", headers.APIKey)
+		return app_error.ErrUnauthorized
 	}
+
+	if headers.RequestID == "" || len(headers.RequestID) > 20 {
+		return app_error.ErrApiRequestID
+	}
+	if headers.Channel == "" {
+		return app_error.ErrApiChannel
+	}
+	if headers.DeviceOS == "" {
+		return app_error.ErrApiDeviceOS
+	}
+
+	return nil
 }
 
-// CheckDOPA godoc
-// @Tags         customer
-// @Accept       json
-// @Produce      json
-// @Param        Api-Key              header    string                               false  "API key"
-// @Param        Api-DeviceOS         header    string                               false  "Device OS"
-// @Param        request              body      domain.CheckDOPARequest              false  "Body Request"
-// @Success      200  {object}        domain.CheckDOPAResponse
-// @Router       /api/Customer/CheckDOPA [post]
-func (h *DopaHandler) CheckDOPA(c *gin.Context) {
-	timeNow := time.Now()
-	var logList []string
-	var req domain.CheckDOPARequest
-	serviceName := "CheckDOPA"
+func formatValidationErrors(err error) []app_error.ValidationErrorDetail {
+	var validationErrors []app_error.ValidationErrorDetail
 
-	appLogger.Info("Request from client",
-    zap.Any(serviceName, "Data request", req),
-	)
-
-	apiKey := c.GetHeader("Api-Key")
-	if !h.repo.Validate(apiKey, c.Request.Method, c.FullPath()) {
-		h.logger.Errorw("Authorization failed", "path", c.FullPath(), "apiKey", apiKey)
-		handleErrorResponse(c, app_error.ErrUnauthorized)
-		return
-	}
-
-	apiDeviceOS := c.GetHeader("Api-DeviceOS")
-	if apiDeviceOS == "" {
-		handleErrorResponse(c, app_error.ErrApiDeivceOS)
-		return
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		handleErrorResponse(c, app_error.ErrService)
-		return
-	}
-	if err := h.validator.Struct(req); err != nil {
-		appErr := HandleValidationError(err)
-		handleErrorResponse(c, appErr)
-		if appErr.ErrorCode == "SYS500" {
-			return
+	if ve, ok := err.(validator.ValidationErrors); ok {
+		for _, fieldErr := range ve {
+			validationErrors = append(validationErrors, app_error.ValidationErrorDetail{
+				Field:   fieldErr.Field(),
+				Tag:     fieldErr.Tag(),
+				Message: fmt.Sprintf("Field validation for '%s' failed on the '%s' tag", fieldErr.Field(), fieldErr.Tag()),
+			})
 		}
-		return
+	}
+	return validationErrors
+}
+
+func HandleValidationError(err error) *app_error.AppError {
+	validationErrors := formatValidationErrors(err)
+
+	var missingFields []string
+	var lengthExceededFields []string
+
+	for _, ve := range validationErrors {
+		switch ve.Tag {
+		case "required":
+			missingFields = append(missingFields, ve.Field)
+		case "max", "lte":
+			lengthExceededFields = append(lengthExceededFields, ve.Field)
+		}
 	}
 
-	CheckDOPAResponse := h.service.CheckDOPARequest(c, req)
-	if CheckDOPAResponse.AppError != nil {
-		handleErrorResponse(c, CheckDOPAResponse.AppError)
-		return
+	if len(missingFields) > 0 {
+		return &app_error.AppError{
+			Code:    app_error.ErrRequiedParam.Code,
+			Message: app_error.ErrRequiedParam.Message + "(" + strings.Join(missingFields, ", ") + ")",
+			Err:     fmt.Errorf("required fields: %v", missingFields),
+		}
 	}
 
-	appLogger.Info("Response to client",
-    zap.Any(serviceName, "Data response", CheckDOPAResponse),
-	)
-
-	var responseError *app_error.AppError
-	if  CheckDOPAResponse.DomainError != nil {
-		responseError = CheckDOPAResponse.DomainError
-	}
-	if responseError != nil {
-		handleErrorResponse(c, responseError)
-		return
+	if len(lengthExceededFields) > 0 {
+		return &app_error.AppError{
+			Code:    app_error.ErrInternalLength.Code,
+			Message: app_error.ErrInternalLength.Message + " (" + strings.Join(lengthExceededFields, ", ") + ")",
+			Err:     fmt.Errorf("max length fields: %v", lengthExceededFields),
+		}
 	}
 
-	c.JSON(http.StatusOK, CheckDOPAResponse.Response)
+	return &app_error.AppError{
+		Code:    app_error.ErrService.Code,
+		Message: app_error.ErrService.Message,
+		Err:     fmt.Errorf("%v", validationErrors),
+	}
 }
