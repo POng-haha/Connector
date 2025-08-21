@@ -1,62 +1,40 @@
 package service
 
 import (
-	"connectorapi-go/internal/adapter/client"
-	"connectorapi-go/internal/adapter/utils"
-	"connectorapi-go/internal/core/domain"
-	"connectorapi-go/internal/core/service/format"
-	"connectorapi-go/pkg/config"
+	"context"
 	"fmt"
-	"strings"
+	"time"
 
-	app_error "connectorapi-go/pkg/error"
+	"picoapi-go/internal/adapter/client/api"
+	dopa "picoapi-go/internal/adapter/client/api/dopa"
+	"picoapi-go/internal/core/domain"
+	"picoapi-go/pkg/config"
+	app_error "picoapi-go/pkg/error"
 
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
-// TCPSocketClient defines the interface for a TCP socket client
-type collectionTCPSocketClient = client.TCPSocketClient
-
-// CollectionService implements the business logic for customer-related features
-type CollectionService struct {
-	config       *config.Config
-	logger       *zap.SugaredLogger
-	tcpClient    client.TCPSocketClient
-	routes       map[string]config.Route
-	destinations map[string]config.Destination
+type DopaService struct {
+	config     *config.Config
+	logger     *zap.SugaredLogger
+	httpClient *api.HTTPClient
+	endpoint   string
+	certName   string
 }
 
-// NewCollectionService creates a new instance of CustomerService.
-func NewCollectionService(
-	cfg *config.Config,
-	logger *zap.SugaredLogger,
-	tcpClient collectionTCPSocketClient,
-	routes map[string]config.Route,
-	destinations map[string]config.Destination,
-) *CollectionService {
-	return &CollectionService{
-		config:       cfg,
-		logger:       logger,
-		tcpClient:    tcpClient,
-		routes:       routes,
-		destinations: destinations,
+func NewDopaService(cfg *config.Config, logger *zap.SugaredLogger, httpClient *api.HTTPClient, endpoint, certName string) *DopaService {
+	return &DopaService{
+		config:     cfg,
+		logger:     logger,
+		httpClient: httpClient,
+		endpoint:   endpoint,
+		certName:   certName,
 	}
 }
 
-// CollectionDetail handles the CollectionDetail request
-// It sends a request to the TCP service and returns the response.
-func (s *CollectionService) CollectionDetail(c *gin.Context, reqData domain.CollectionDetailRequest) (*domain.CollectionDetailResponse, *app_error.AppError) {
-	//const routeKey = "POST:/Api/Collection/CollectionDetail"
-	routeKey := utils.GetRouteKey(c)
-	const destinationName = "systemI"
-	//var logLine string
-
-	idValue, _ := c.Get("Api-RequestID")
-	apiRequestID, ok := idValue.(string)
-	if !ok {
-		apiRequestID = ""
-	}
+func (s *DopaService) CheckDOPA(ctx context.Context, req domain.CheckDOPARequest) (*domain.CheckDOPAResponse, error) {
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	serviceName := "CheckDOPA"
 
 	route, ok := s.routes[routeKey]
 	if !ok {
@@ -69,159 +47,68 @@ func (s *CollectionService) CollectionDetail(c *gin.Context, reqData domain.Coll
 		s.logger.Errorw("TCP Destination configuration not found", "destinationName", destinationName)
 		return nil, app_error.ErrConfig
 	}
-	if destination.Type != "tcp" {
+	if destination.Type != "https" {
 		s.logger.Errorw("Destination type is not TCP", "destinationName", destinationName, "type", destination.Type)
 		return nil, app_error.ErrConfig
 	}
 
-	portList, ok := destination.Ports["CollectionDetail"]
-	if !ok || len(portList) == 0 {
-		s.logger.Errorw("Invalid port configuration", "port", portList)
-		return nil, app_error.ErrConfig
-	}
-	port := utils.RandomPortFromList(portList)
-	if port == "" {
-		s.logger.Errorw("Invalid port configuration", "port", portList)
-		return nil, app_error.ErrConfig
+	// 1. สร้าง SOAP request
+	soapReq := &dopa.CheckCardByLaser{
+		PID:       req.IDCardNo,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		BirthDay:  req.BirthDate,
+		Laser:     req.LaserID,
 	}
 
-	tcpAddress := fmt.Sprintf("%s:%s", destination.IP, port)
+	s.logger.Infow("Send to Dopa request", "service", serviceName, "timestamp", timestamp, "parameter_request", req)
 
-	formattedRequestID := utils.PadOrTruncate(apiRequestID, 20)
-	fixedLengthData := format.FormatCollectionDetailRequest(reqData)
-
-	header := utils.BuildFixedLengthHeader(
-		route.System,
-		route.Service,
-		route.Format,
-		formattedRequestID,
-		route.RequestLength,
-	)
-
-	combinedPayloadString := header + fixedLengthData
-
-	s.logger.Info("Sending TCP request payload : ", combinedPayloadString)
-
-	responseStr, err := s.tcpClient.SendAndReceive(tcpAddress, combinedPayloadString)
+	// 2. Call SOAP
+	soapResp := &dopa.CheckCardByLaserResponse{}
+	err := s.httpClient.CallSOAP(ctx, s.certName, s.endpoint, "http://tempuri.org/CheckCardByLaser", soapReq, soapResp)
 	if err != nil {
-		s.logger.Errorw("Downstream TCP service call failed", "error", err, "address", tcpAddress)
-		return nil, app_error.ErrService
+		s.logger.Errorw("Dopa service call failed", "error", err)
+		return nil, app_error.ErrDopa
 	}
 
-	// Check if the response contains an error
-	errorCode := strings.TrimSpace(responseStr[67:73])
-	errorMessage := strings.TrimSpace(responseStr[73:123])
+	if soapResp.CheckCardByLaserResult == nil {
+		s.logger.Error("Dopa response result is nil")
+		return nil, app_error.ErrDopa
+	}
 
-	switch errorCode {
-	case "SVC105":
-		return nil, app_error.ErrRequiedParam
-	case "SVC117":
-		return nil, app_error.ErrIDCardNotFound
-	case "SVC902":
-		return nil, app_error.ErrSystemI
-	case "SVC203":
-		return nil, app_error.ErrSUEInfoNotFound
+	result := soapResp.CheckCardByLaserResult
+	checkDOPAResponse := struct {
+		IsError      bool
+		ErrorMessage string
+		Code         string
+		Desc         string
+		Reference    string
+	}{
+		IsError:      result.IsError,
+		ErrorMessage: result.ErrorMessage,
+		Code:         fmt.Sprintf("%d", result.Code),
+		Desc:         result.Desc,
+		Reference:    req.Reference,
+	}
+
+	s.logger.Infow("Dopa response", "service", serviceName, "timestamp", timestamp, "data_response", checkDOPAResponse)
+
+	// 3. Business logic
+	switch checkDOPAResponse.Code {
+	case "0":
+		if checkDOPAResponse.ErrorMessage != "สถานะปกติ" {
+			return nil, app_error.NewErrorDopaInvalid(checkDOPAResponse.ErrorMessage)
+		}
+	case "1", "2", "3", "4", "5":
+		return nil, app_error.NewErrorDopaInvalid(checkDOPAResponse.ErrorMessage)
 	default:
-    	if errorCode != "" {
-        	s.logger.Info("Unknown error code from System I : ",
-         	   "code", errorCode,
-          	  "message", errorMessage,
-        	)
-        	return nil, app_error.ErrSystemIUnexpect
-    	}
+		s.logger.Infow("Unknown code from Dopa", "code", checkDOPAResponse.Code, "message", checkDOPAResponse.ErrorMessage)
+		return nil, app_error.ErrDopa
 	}
 
-	s.logger.Info("Received downstream TCP response", "response", string(responseStr))
-
-	response, _ := format.FormatCollectionDetailResponse(responseStr)
-	return &response, nil
-}
-
-// CollectionLog handles the logic for logging collection data via TCP.
-// It sends a request to the TCP service and returns the response.
-func (s *CollectionService) CollectionLog(c *gin.Context, reqData domain.CollectionLogRequest) (*domain.CollectionLogResponse, *app_error.AppError) {
-	//const routeKey = "POST:/Api/Collection/CollectionLog"
-	routeKey := utils.GetRouteKey(c)
-	const destinationName = "systemI"
-
-	idValue, _ := c.Get("Api-RequestID")
-	apiRequestID, ok := idValue.(string)
-	if !ok {
-		apiRequestID = ""
-	}
-
-	route, ok := s.routes[routeKey]
-	if !ok {
-		s.logger.Errorw("Route configuration not found for TCP service", "routeKey", routeKey)
-		return nil, app_error.ErrConfig
-	}
-
-	destination, ok := s.destinations[destinationName]
-	if !ok {
-		s.logger.Errorw("TCP Destination configuration not found", "destinationName", destinationName)
-		return nil, app_error.ErrConfig
-	}
-	if destination.Type != "tcp" {
-		s.logger.Errorw("Destination type is not TCP", "destinationName", destinationName, "type", destination.Type)
-		return nil, app_error.ErrConfig
-	}
-
-	portList, ok := destination.Ports["CollectionDetail"]
-	if !ok || len(portList) == 0 {
-		s.logger.Errorw("Invalid port configuration", "port", portList)
-		return nil, app_error.ErrConfig
-	}
-	port := utils.RandomPortFromList(portList)
-	if port == "" {
-		s.logger.Errorw("Invalid port configuration", "port", portList)
-		return nil, app_error.ErrConfig
-	}
-
-	tcpAddress := fmt.Sprintf("%s:%s", destination.IP, port)
-
-	formattedRequestID := utils.PadOrTruncate(apiRequestID, 20)
-	fixedLengthData := format.FormatCollectionLogRequest(reqData)
-
-	header := utils.BuildFixedLengthHeader(
-		route.System,
-		route.Service,
-		route.Format,
-		formattedRequestID,
-		route.RequestLength,
-	)
-
-	combinedPayloadString := header + fixedLengthData
-	s.logger.Info("Sending TCP request payload", "payload", combinedPayloadString)
-
-	responseStr, err := s.tcpClient.SendAndReceive(tcpAddress, combinedPayloadString)
-	if err != nil {
-		s.logger.Errorw("Downstream TCP service call failed", "error", err, "address", tcpAddress)
-		return nil, app_error.ErrService
-	}
-
-	// Check if the response contains an error
-	errorCode := strings.TrimSpace(responseStr[67:73])
-	errorMessage := strings.TrimSpace(responseStr[73:123])
-
-	switch errorCode {
-	case "SVC216", "SVC235", "SVC342", "SVC343", "SCV344":
-		return nil, app_error.ErrRequiedParam
-	case "SVC236":
-		return nil, app_error.ErrAgmNoNotFound
-	case "SVC902":
-		return nil, app_error.ErrSystemI
-	default:
-    	if errorCode != "" {
-        	s.logger.Info("Unknown error code from System I : ",
-         	   "code", errorCode,
-          	  "message", errorMessage,
-        	)
-        	return nil, app_error.ErrSystemIUnexpect
-    	}
-	}
-
-	s.logger.Debugw("Received downstream TCP response", "response", string(responseStr))
-
-	response, _:= format.FormatCollectionLogResponse(responseStr)
-	return &response, nil
+	// 4. Success response
+	return &domain.CheckDOPAResponse{
+		Result:    true,
+		Reference: req.Reference,
+	}, nil
 }
