@@ -2,171 +2,140 @@ package handler
 
 import (
 	"fmt"
-	"math/rand"
 	"net/http"
-	"time"
+	"strings"
 
+	app_error "connectorapi-go/pkg/error"
 	"connectorapi-go/internal/adapter/utils"
-	"connectorapi-go/pkg/logger"
-	"connectorapi-go/pkg/metrics"
-	_ "connectorapi-go/docs"
 
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/go-playground/validator/v10"
+
 	"go.uber.org/zap"
 )
 
-const apiRequestID = "Api-RequestID"
-const apiKey = "Api-Key"
-const apiLanguage = "Api-Language"
-const apiDeviceOS = "Api-DeviceOS"
-const apiChannel = "Api-Channel"
-
-// SetupRouter
-func SetupRouter(
-	appLogger *zap.SugaredLogger,
-	repo *utils.APIKeyRepository,
-	collectionHandler *CollectionHandler,
-) *gin.Engine {
-	router := gin.New()
-
-	// --- Global Middlewares ---
-	router.Use(ApiRequestIDMiddleware())
-	router.Use(ApiKeyMiddleware())
-	router.Use(ApiLanguageMiddleware())
-	router.Use(ApiDeviceOSMiddleware())
-	router.Use(ApiChannelMiddleware())
-
-	router.Use(logger.GinLogger(appLogger, apiRequestID, apiLanguage, apiDeviceOS, apiChannel))
-	router.Use(PrometheusMiddleware())
-	router.Use(gin.Recovery())
-
-	// --- Public API Group ---
-
-	router.GET("/healthz", HealthCheck)
-	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
-	// --- API Group  ---
-	apiRoute := router.Group("/Api")
-	{
-		collectionHandler.RegisterRoutes(apiRoute)
-	}
-
-	return router
+// --- Helper struct & function ---
+type apiHeaders struct {
+	APIKey    string
+	RequestID string
+	Channel   string
+	DeviceOS  string
 }
 
-// --- Middlewares Definitions ---
-// RequestIDMiddleware checks for an incoming X-Request-ID, RequestID header
-func ApiRequestIDMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		reqID := c.GetHeader("X-Request-ID")
+func handleErrorResponse(c *gin.Context, appErr *app_error.AppError) {
+	statusCode := http.StatusInternalServerError
+	switch appErr.Code {
+	case app_error.ErrValidation.Code,
+		app_error.ErrRequiedParam.Code,
+		app_error.ErrApiChannel.Code,
+		app_error.ErrApiRequestID.Code,
+		app_error.ErrApiDeviceOS.Code,
+		app_error.ErrIDCardNotFound.Code,
+		app_error.ErrSUEInfoNotFound.Code,
+		app_error.ErrAgmNoNotFound.Code,
+		app_error.ErrService.Code,
+		app_error.ErrSystemI.Code,
+		app_error.ErrSystemIUnexpect.Code:
+		statusCode = http.StatusBadRequest
+	case app_error.ErrUnauthorized.Code:
+		statusCode = http.StatusUnauthorized
+	case app_error.ErrForbidden.Code:
+		statusCode = http.StatusForbidden
+	case app_error.ErrNotFound.Code:
+		statusCode = http.StatusNotFound
+	case app_error.ErrService.Code:
+		statusCode = http.StatusBadGateway
+	case app_error.ErrTimeOut.Code:
+		statusCode = http.StatusGatewayTimeout
+	}
 
-		if reqID == "" {
-			reqID = c.GetHeader("Api-RequestID")
-		}
+	errResponse := app_error.ErrorResponse{
+		ErrorCode:    appErr.Code,
+		ErrorMessage: appErr.Message,
+	}
 
-		if reqID == "" {
-			prefix := "RQ"
+	c.JSON(statusCode, errResponse)
+}
 
-			now := time.Now()
-			dateTime := now.Format("20060102150405") // YYYYMMDDhhmmss
-
-			r := rand.New(rand.NewSource(time.Now().UnixNano())) // seed random with time now
-			runningNo := r.Intn(10000)                           // random 0–9999
-			runningStr := fmt.Sprintf("%04d", runningNo)
-
-			reqID = prefix + dateTime + runningStr
-		}
-
-		c.Set(apiRequestID, reqID)
-		c.Header("X-Request-ID", reqID)
-		c.Header("Api-RequestID", reqID)
-
-		c.Next()
+func getAPIHeaders(c *gin.Context) apiHeaders {
+	return apiHeaders{
+		APIKey:    c.GetHeader("Api-Key"),
+		RequestID: c.GetHeader("Api-RequestID"),
+		Channel:   c.GetHeader("Api-Channel"),
+		DeviceOS:  c.GetHeader("Api-DeviceOS"),
 	}
 }
 
-func ApiKeyMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		key := c.GetHeader("X-Key")
-		if key == "" {
-			key = c.GetHeader("Api-Key")
-		}
+func ValidateHeadersAndAuth(c *gin.Context, method string, path string, apiKeyRepo *utils.APIKeyRepository, logger *zap.SugaredLogger) *app_error.AppError {
+	headers := getAPIHeaders(c)
 
-		c.Set(apiKey, key)
-		c.Header("X-Key", key)
-		c.Header("Api-Key", key)
-
-		c.Next()
+	if !apiKeyRepo.Validate(headers.APIKey, method, path) {
+		logger.Warnw("Authorization failed", "path", path, "apiKey", headers.APIKey)
+		return app_error.ErrUnauthorized
 	}
+
+	if headers.RequestID == "" || len(headers.RequestID) > 20 {
+		return app_error.ErrApiRequestID
+	}
+	if headers.Channel == "" {
+		return app_error.ErrApiChannel
+	}
+	if headers.DeviceOS == "" {
+		return app_error.ErrApiDeviceOS
+	}
+
+	return nil
 }
 
-func ApiLanguageMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		language := c.GetHeader("X-Language")
-		if language == "" {
-			language = c.GetHeader("Api-Language")
-		}
-		if language == "" {
-			language = "EN"
-		}
+func formatValidationErrors(err error) []app_error.ValidationErrorDetail {
+	var validationErrors []app_error.ValidationErrorDetail
 
-		c.Set(apiLanguage, language)
-		c.Header("X-Language", language)
-		c.Header("Api-Language", language)
-
-		c.Next()
+	if ve, ok := err.(validator.ValidationErrors); ok {
+		for _, fieldErr := range ve {
+			validationErrors = append(validationErrors, app_error.ValidationErrorDetail{
+				Field:   fieldErr.Field(),
+				Tag:     fieldErr.Tag(),
+				Message: fmt.Sprintf("Field validation for '%s' failed on the '%s' tag", fieldErr.Field(), fieldErr.Tag()),
+			})
+		}
 	}
+	return validationErrors
 }
 
-func ApiDeviceOSMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		deviceOS := c.GetHeader("X-Device-OS")
-		if deviceOS == "" {
-			deviceOS = c.GetHeader("Api-DeviceOS")
+func HandleValidationError(err error) *app_error.AppError {
+	validationErrors := formatValidationErrors(err)
+
+	var missingFields []string
+	var lengthExceededFields []string
+
+	for _, ve := range validationErrors {
+		switch ve.Tag {
+		case "required":
+			missingFields = append(missingFields, ve.Field)
+		case "max", "lte":
+			lengthExceededFields = append(lengthExceededFields, ve.Field)
 		}
-
-		c.Set(apiDeviceOS, deviceOS)
-		c.Header("X-DeviceOS", deviceOS)
-		c.Header("Api-DeviceOS", deviceOS)
-
-		c.Next()
 	}
-}
 
-func ApiChannelMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		channel := c.GetHeader("X-Channel")
-		if channel == "" {
-			channel = c.GetHeader("Api-Channel")
+	if len(missingFields) > 0 {
+		return &app_error.AppError{
+			Code:    app_error.ErrRequiedParam.Code,
+			Message: app_error.ErrRequiedParam.Message + "(" + strings.Join(missingFields, ", ") + ")",
+			Err:     fmt.Errorf("required fields: %v", missingFields),
 		}
-
-		c.Set(apiChannel, channel)
-		c.Header("X-Channel", channel)
-		c.Header("Api-Channel", channel)
-
-		c.Next()
 	}
-}
 
-// PrometheusMiddleware
-func PrometheusMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		c.Next()
-		status := fmt.Sprintf("%d", c.Writer.Status())
-		path := c.FullPath()
-		method := c.Request.Method
-		metrics.HttpRequestsTotal.With(prometheus.Labels{"method": method, "path": path, "status": status}).Inc()
-		metrics.HttpRequestDuration.With(prometheus.Labels{"method": method, "path": path, "status": status}).Observe(time.Since(start).Seconds())
+	if len(lengthExceededFields) > 0 {
+		return &app_error.AppError{
+			Code:    app_error.ErrInternalLength.Code,
+			Message: app_error.ErrInternalLength.Message + " (" + strings.Join(lengthExceededFields, ", ") + ")",
+			Err:     fmt.Errorf("max length fields: %v", lengthExceededFields),
+		}
 	}
-}
 
-// HealthCheck provides a simple health check endpoint.
-func HealthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	return &app_error.AppError{
+		Code:    app_error.ErrService.Code,
+		Message: app_error.ErrService.Message,
+		Err:     fmt.Errorf("%v", validationErrors),
+	}
 }
