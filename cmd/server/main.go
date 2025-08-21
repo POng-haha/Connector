@@ -1,10 +1,16 @@
-[
-  {
-    "key": "2OmQxYnUkPjaUvX3j7LLpLt3OlTlx1gz",
-    "clientName": "pico",
-    "status": "active",
-    "permissions": [
-      "POST:/api/Customer/CheckDOPA"
-    ]
+{
+  "destinations": {
+    "dopa": {
+      "type": "https",
+      "host": "https://idcard.bora.dopa.go.th",
+      "timeout": 20
+    }
+  },
+  "routes": {
+    "POST:/api/Customer/CheckDOPA": {
+      "destinationName": "dopa",
+      "path": "/CheckCardStatus/CheckCardService.asmx",
+      "apiKey": ""
+    }
   }
-]
+}
