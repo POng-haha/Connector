@@ -1,4 +1,4 @@
-package repository
+package utils
 
 import (
 	"connectorapi-go/pkg/config"
@@ -6,14 +6,14 @@ import (
 
 // Validation of API keys based on configuration
 type APIKeyRepository struct {
-	keys map[string]*config.APIKeyIncoming
+	keys map[string]*config.APIKey
 }
 
 // New repository and pre-loads keys into map
-func NewAPIKeyRepository(cfg *config.Config) *APIKeyRepository {
-	keyMap := make(map[string]*config.APIKeyIncoming)
-	for i := range cfg.APIKeys {
-		keyMap[cfg.APIKeys[i].Key] = &cfg.APIKeys[i]
+func NewAPIKeyRepository(apiKeys []config.APIKey) *APIKeyRepository {
+	keyMap := make(map[string]*config.APIKey)
+	for i := range apiKeys {
+		keyMap[apiKeys[i].Key] = &apiKeys[i]
 	}
 	return &APIKeyRepository{keys: keyMap}
 }
@@ -22,16 +22,16 @@ func NewAPIKeyRepository(cfg *config.Config) *APIKeyRepository {
 func (r *APIKeyRepository) Validate(apiKey, method, path string) bool {
 	clientKey, exists := r.keys[apiKey]
 	if !exists || clientKey.Status != "active" {
-		return false // Key does not exist or is inactive
+		return false
 	}
 
 	// Check if the key has permission for the specific METHOD:PATH
 	routeKey := method + ":" + path
 	for _, p := range clientKey.Permissions {
 		if p == routeKey {
-			return true // Permission granted
+			return true
 		}
 	}
 
-	return false // No permission found
+	return false
 }
