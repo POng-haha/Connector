@@ -2,18 +2,16 @@ package handler
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"time"
 
-	"connectorapi-go/internal/adapter/repository"
-	"connectorapi-go/internal/core/domain"
+	"connectorapi-go/internal/adapter/utils"
 	"connectorapi-go/pkg/logger"
 	"connectorapi-go/pkg/metrics"
-
 	_ "connectorapi-go/docs"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	swaggerFiles "github.com/swaggo/files"
@@ -21,17 +19,16 @@ import (
 	"go.uber.org/zap"
 )
 
-const apiRequestID 	= "Api-RequestID"
-const apiKey 		= "Api-Key"
-const apiLanguage	= "Api-Language"
-const apiDeviceOS 	= "Api-DeviceOS"
-const apiChannel 	= "Api-Channel"
+const apiRequestID = "Api-RequestID"
+const apiKey = "Api-Key"
+const apiLanguage = "Api-Language"
+const apiDeviceOS = "Api-DeviceOS"
+const apiChannel = "Api-Channel"
 
 // SetupRouter
 func SetupRouter(
 	appLogger *zap.SugaredLogger,
-	repo *repository.APIKeyRepository,
-	customerHandler *CustomerHandler,
+	repo *utils.APIKeyRepository,
 	collectionHandler *CollectionHandler,
 ) *gin.Engine {
 	router := gin.New()
@@ -43,30 +40,26 @@ func SetupRouter(
 	router.Use(ApiDeviceOSMiddleware())
 	router.Use(ApiChannelMiddleware())
 
-	router.Use(logger.GinLogger(appLogger, apiRequestID, apiKey, apiLanguage, apiDeviceOS, apiChannel))
+	router.Use(logger.GinLogger(appLogger, apiRequestID, apiLanguage, apiDeviceOS, apiChannel))
 	router.Use(PrometheusMiddleware())
 	router.Use(gin.Recovery())
 
-	// --- Public API Group (/Api) ---
-	api := router.Group("/Api")
-	{
-		api.GET("/healthz", HealthCheck)
-		api.GET("/metrics", gin.WrapH(promhttp.Handler()))
-		api.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	}
+	// --- Public API Group ---
 
-	// --- Sub API Group  ---
-	apiAuth.api.Group("")
+	router.GET("/healthz", HealthCheck)
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	// --- API Group  ---
+	apiRoute := router.Group("/Api")
 	{
-		customerHandler.RegisterRoutes(apiAuth)
-		collectionHandler.RegisterRoutes(apiAuth)
+		collectionHandler.RegisterRoutes(apiRoute)
 	}
 
 	return router
 }
 
 // --- Middlewares Definitions ---
-
 // RequestIDMiddleware checks for an incoming X-Request-ID, RequestID header
 func ApiRequestIDMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -78,16 +71,18 @@ func ApiRequestIDMiddleware() gin.HandlerFunc {
 
 		if reqID == "" {
 			prefix := "RQ"
+
 			now := time.Now()
-			datetime := now.Format("20060102150405") //format YYYYMMDDhhmmss
-			rand.Seed(time.now().Uninano()) // seed random with time now
-			runningNo := rand.Intn(1000) // random 0-9999
+			dateTime := now.Format("20060102150405") // YYYYMMDDhhmmss
+
+			r := rand.New(rand.NewSource(time.Now().UnixNano())) // seed random with time now
+			runningNo := r.Intn(10000)                           // random 0–9999
 			runningStr := fmt.Sprintf("%04d", runningNo)
 
-			reqID = prefix + datetime + runningStr
+			reqID = prefix + dateTime + runningStr
 		}
 
-		c.Set(RequestID, reqID)
+		c.Set(apiRequestID, reqID)
 		c.Header("X-Request-ID", reqID)
 		c.Header("Api-RequestID", reqID)
 
