@@ -1,189 +1,117 @@
 package handler
 
 import (
-	"fmt"
+	// "fmt"
 	"net/http"
+	"time"
 
-	"connectorapi-go/internal/core/domain"
+	"picoapi-go/internal/core/domain"
+	"picoapi-go/internal/adapter/utils"
+	"picoapi-go/pkg/config"
+	app_error "picoapi-go/pkg/error"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+
+	"go.uber.org/zap"
 )
 
-// CustomerService defines the interface
-type CustomerService interface {
-	GetCustomerInfo(reqData domain.GetCustomerInfoRequest, requestID string) (*domain.GetCustomerInfoResponse, *domain.AppError)
-	UpdateAddress(reqData domain.UpdateAddressRequest, requestID string) (*domain.UpdateAddressResponse, *domain.AppError)
-	GetCustomerInfo004(reqData domain.GetCustomerInfo004Request, requestID string) (*domain.GetCustomerInfo004Response, *domain.AppError)
+// DopaService defines the interface
+type DopaService interface {
+	CheckDOPA(c *gin.Context, checkDOPARq domain.CheckDOPARequest) domain.CheckDOPAResponse
 }
 
-// CustomerHandler handles all customer-related API requests
-type CustomerHandler struct {
-	service   CustomerService
+// DopaHandler handles all customer-related API requests
+type DopaHandler struct {
+	service   DopaService
 	validator *validator.Validate
+	logger    *zap.SugaredLogger
+	config    *config.Config
+	repo 	  *utils.APIKeyRepository
 }
 
-// NewCustomerHandler creates a new instance of CustomerHandler
-func NewCustomerHandler(s CustomerService) *CustomerHandler {
-	return &CustomerHandler{
+// NewDopaHandler creates a new instance of CommonHandler
+func NewDopaHandler(s DopaService, logger *zap.SugaredLogger, cfg *config.Config, repo *utils.APIKeyRepository) *DopaHandler {
+	return &DopaHandler{
 		service:   s,
 		validator: validator.New(),
+		logger:    logger,
+		config:    cfg,
+		repo:	   repo,
 	}
 }
 
 // RegisterRoutes registers all routes related to customers to the router group
-func (h *CustomerHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	customerRoutes := rg.Group("/customer")
+func (h *DopaHandler) RegisterRoutes(rg *gin.RouterGroup) {
+	customerRoutes := rg.Group("/Customer")
 	{
-		customerRoutes.POST("/getcustomerinfo", h.GetCustomerInfo)
-		customerRoutes.POST("/updateaddress", h.UpdateAddress)
-		customerRoutes.POST("/getcustomerinfo004", h.GetCustomerInfo004)
+		customerRoutes.POST("/CheckDOPA", h.CheckDOPA)
 	}
 }
 
-// GetCustomerInfo handles the POST /customer/getcustomerinfo request
-// @Summary      Get Customer Information
-// @Description  retrieves customer details based on customer ID and channel
-// @Tags         Customer
+// CheckDOPA godoc
+// @Tags         customer
 // @Accept       json
 // @Produce      json
-// @Param        API-Key   header      string  true  "Client's API Key"
-// @Param        RequestID header      string  true  "Client's Request ID"
-// @Param        request   body      domain.GetCustomerInfoRequest  true  "Request Body"
-// @Success      200       {object}  domain.GetCustomerInfoResponse
-// @Failure      400       {object}  domain.ErrorResponse
-// @Failure      401       {object}  domain.ErrorResponse
-// @Failure      500       {object}  domain.ErrorResponse
-// @Router       /customer/getcustomerinfo [post]
-func (h *CustomerHandler) GetCustomerInfo(c *gin.Context) {
-	var req domain.GetCustomerInfoRequest
+// @Param        Api-Key              header    string                               false  "API key"
+// @Param        Api-DeviceOS         header    string                               false  "Device OS"
+// @Param        request              body      domain.CheckDOPARequest              false  "Body Request"
+// @Success      200  {object}        domain.CheckDOPAResponse
+// @Router       /api/Customer/CheckDOPA [post]
+func (h *DopaHandler) CheckDOPA(c *gin.Context) {
+	timeNow := time.Now()
+	var logList []string
+	var req domain.CheckDOPARequest
+	serviceName := "CheckDOPA"
+
+	appLogger.Info("Request from client",
+    zap.Any(serviceName, "Data request", req),
+	)
+
+	apiKey := c.GetHeader("Api-Key")
+	if !h.repo.Validate(apiKey, c.Request.Method, c.FullPath()) {
+		h.logger.Errorw("Authorization failed", "path", c.FullPath(), "apiKey", apiKey)
+		handleErrorResponse(c, app_error.ErrUnauthorized)
+		return
+	}
+
+	apiDeviceOS := c.GetHeader("Api-DeviceOS")
+	if apiDeviceOS == "" {
+		handleErrorResponse(c, app_error.ErrApiDeivceOS)
+		return
+	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		validationErrors := formatValidationErrors(err)
-		appErr := &domain.AppError{
-			Code:    domain.ErrValidation.Code,
-			Message: domain.ErrValidation.Message,
-			Err:     fmt.Errorf("%v", validationErrors),
+		handleErrorResponse(c, app_error.ErrService)
+		return
+	}
+	if err := h.validator.Struct(req); err != nil {
+		appErr := HandleValidationError(err)
+		handleErrorResponse(c, appErr)
+		if appErr.ErrorCode == "SYS500" {
+			return
 		}
-		handleErrorResponse(c, appErr)
 		return
 	}
 
-	requestID := c.GetString(RequestID)
-	if requestID == "" {
-		// This case should ideally not happen if RequestIDMiddleware always sets it,
-		// but it's good for robustness.
-		appErr := &domain.AppError{
-			Code:    domain.ErrInternalServer.Code, // Or ErrConfig if RequestID constant is not resolved
-			Message: "RequestID not found in context after middleware",
-		}
-		handleErrorResponse(c, appErr)
+	CheckDOPAResponse := h.service.CheckDOPARequest(c, req)
+	if CheckDOPAResponse.AppError != nil {
+		handleErrorResponse(c, CheckDOPAResponse.AppError)
 		return
 	}
 
-	customerInfo, appErr := h.service.GetCustomerInfo(req, requestID)
-	if appErr != nil {
-		handleErrorResponse(c, appErr)
+	appLogger.Info("Response to client",
+    zap.Any(serviceName, "Data response", CheckDOPAResponse),
+	)
+
+	var responseError *app_error.AppError
+	if  CheckDOPAResponse.DomainError != nil {
+		responseError = CheckDOPAResponse.DomainError
+	}
+	if responseError != nil {
+		handleErrorResponse(c, responseError)
 		return
 	}
 
-	c.JSON(http.StatusOK, customerInfo)
-}
-
-// UpdateAddress handles the POST /customer/updateaddress request
-// @Summary      Update Customer Address
-// @Description  update customer address from request
-// @Tags         Customer
-// @Accept       json
-// @Produce      json
-// @Param        API-Key   header      string  true  "Client's API Key"
-// @Param        RequestID header      string  true  "Client's Request ID"
-// @Param        request   body      domain.UpdateAddressRequest  true  "Request Body"
-// @Success      200       {object}  domain.UpdateAddressResponse
-// @Failure      400       {object}  domain.ErrorResponse
-// @Failure      401       {object}  domain.ErrorResponse
-// @Failure      500       {object}  domain.ErrorResponse
-// @Router       /customer/updateaddress [post]
-func (h *CustomerHandler) UpdateAddress(c *gin.Context) {
-	var req domain.UpdateAddressRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		validationErrors := formatValidationErrors(err)
-		appErr := &domain.AppError{
-			Code:    domain.ErrValidation.Code,
-			Message: domain.ErrValidation.Message,
-			Err:     fmt.Errorf("%v", validationErrors),
-		}
-		handleErrorResponse(c, appErr)
-		return
-	}
-
-	requestID := c.GetString(RequestID)
-	if requestID == "" {
-		// This case should ideally not happen if RequestIDMiddleware always sets it,
-		// but it's good for robustness.
-		appErr := &domain.AppError{
-			Code:    domain.ErrInternalServer.Code, // Or ErrConfig if RequestID constant is not resolved
-			Message: "RequestID not found in context after middleware",
-		}
-		handleErrorResponse(c, appErr)
-		return
-	}
-
-	response, appErr := h.service.UpdateAddress(req, requestID)
-	if appErr != nil {
-		handleErrorResponse(c, appErr)
-		return
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-// GetCustomerInfo004 handles the POST /customer/getcustomerinfo004 request
-// @Summary      Get Customer Information format 004
-// @Description  retrieves customer details based on customer ID and channel
-// @Tags         Customer
-// @Accept       json
-// @Produce      json
-// @Param        API-Key   header      string  true  "Client's API Key"
-// @Param        RequestID header      string  true  "Client's Request ID"
-// @Param        request   body      domain.GetCustomerInfoRequest  true  "Request Body"
-// @Success      200       {object}  domain.GetCustomerInfoResponse
-// @Failure      400       {object}  domain.ErrorResponse
-// @Failure      401       {object}  domain.ErrorResponse
-// @Failure      500       {object}  domain.ErrorResponse
-// @Router       /customer/getcustomerinfo [post]
-func (h *CustomerHandler) GetCustomerInfo004(c *gin.Context) {
-	var req domain.GetCustomerInfo004Request
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		validationErrors := formatValidationErrors(err)
-		appErr := &domain.AppError{
-			Code:    domain.ErrValidation.Code,
-			Message: domain.ErrValidation.Message,
-			Err:     fmt.Errorf("%v", validationErrors),
-		}
-		handleErrorResponse(c, appErr)
-		return
-	}
-
-	requestID := c.GetString(RequestID)
-	if requestID == "" {
-		// This case should ideally not happen if RequestIDMiddleware always sets it,
-		// but it's good for robustness.
-		appErr := &domain.AppError{
-			Code:    domain.ErrInternalServer.Code, // Or ErrConfig if RequestID constant is not resolved
-			Message: "RequestID not found in context after middleware",
-		}
-		handleErrorResponse(c, appErr)
-		return
-	}
-
-	customerInfo004, appErr := h.service.GetCustomerInfo004(req, requestID)
-	if appErr != nil {
-		handleErrorResponse(c, appErr)
-		return
-	}
-
-	c.JSON(http.StatusOK, customerInfo004)
+	c.JSON(http.StatusOK, CheckDOPAResponse.Response)
 }
