@@ -1,11 +1,14 @@
 package handler
 
 import (
+	// "fmt"
 	"net/http"
-	
-	"connectorapi-go/internal/adapter/utils"
-	"connectorapi-go/internal/core/domain"
-	app_error "connectorapi-go/pkg/error"
+	"time"
+
+	"picoapi-go/internal/core/domain"
+	"picoapi-go/internal/adapter/utils"
+	"picoapi-go/pkg/config"
+	app_error "picoapi-go/pkg/error"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -13,53 +16,68 @@ import (
 	"go.uber.org/zap"
 )
 
-// CollectionService defines the interface
-type CollectionService interface {
-	CollectionDetail(c *gin.Context, reqData domain.CollectionDetailRequest) (*domain.CollectionDetailResponse, *app_error.AppError)
-	CollectionLog(c *gin.Context, reqData domain.CollectionLogRequest) (*domain.CollectionLogResponse, *app_error.AppError)
+// DopaService defines the interface
+type DopaService interface {
+	CheckDOPA(c *gin.Context, checkDOPARq domain.CheckDOPARequest) domain.CheckDOPAResponse
 }
 
-// CollectionHandler handles all Collection-related API requests
-type CollectionHandler struct {
-	service CollectionService
+// DopaHandler handles all customer-related API requests
+type DopaHandler struct {
+	service   DopaService
 	validator *validator.Validate
-	logger  *zap.SugaredLogger
-	apikey  *utils.APIKeyRepository
+	logger    *zap.SugaredLogger
+	config    *config.Config
+	repo 	  *utils.APIKeyRepository
 }
 
-// NewCollectionHandler creates a new instance of CollectionHandler
-func NewCollectionHandler(s CollectionService, logger *zap.SugaredLogger, apikey *utils.APIKeyRepository) *CollectionHandler {
-	return &CollectionHandler{
-		service: s,
+// NewDopaHandler creates a new instance of CommonHandler
+func NewDopaHandler(s DopaService, logger *zap.SugaredLogger, cfg *config.Config, repo *utils.APIKeyRepository) *DopaHandler {
+	return &DopaHandler{
+		service:   s,
 		validator: validator.New(),
-		logger:  logger,
-		apikey:  apikey,
+		logger:    logger,
+		config:    cfg,
+		repo:	   repo,
 	}
 }
 
-// RegisterRoutes registers all routes related to Collection to the router group
-func (h *CollectionHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	collectionRoutes := rg.Group("/Collection")
+// RegisterRoutes registers all routes related to customers to the router group
+func (h *DopaHandler) RegisterRoutes(rg *gin.RouterGroup) {
+	customerRoutes := rg.Group("/Customer")
 	{
-		collectionRoutes.POST("/CollectionDetail", h.CollectionDetail)
-		collectionRoutes.POST("/CollectionLog", h.CollectionLog)
+		customerRoutes.POST("/CheckDOPA", h.CheckDOPA)
 	}
 }
 
-// CollectionDetail
-// @Tags         Common
+// CheckDOPA godoc
+// @Tags         customer
 // @Accept       json
 // @Produce      json
 // @Param        Api-Key              header    string                               false  "API key"
-// @Param        request              body      domain.CollectionDetailRequest       false  "Body Request"
-// @Success      200  {object}        domain.CollectionDetailResponse
-// @Router       /Api/Collection/CollectionDetail [post]
-func (h *CollectionHandler) CollectionDetail(c *gin.Context) {
-	var req domain.CollectionDetailRequest
+// @Param        Api-DeviceOS         header    string                               false  "Device OS"
+// @Param        request              body      domain.CheckDOPARequest              false  "Body Request"
+// @Success      200  {object}        domain.CheckDOPAResponse
+// @Router       /api/Customer/CheckDOPA [post]
+func (h *DopaHandler) CheckDOPA(c *gin.Context) {
+	timeNow := time.Now()
+	var logList []string
+	var req domain.CheckDOPARequest
+	serviceName := "CheckDOPA"
 
-	err := ValidateHeadersAndAuth(c, c.Request.Method, c.FullPath(), h.apikey, h.logger)
-	if err != nil {
-		handleErrorResponse(c, err)
+	appLogger.Info("Request from client",
+    zap.Any(serviceName, "Data request", req),
+	)
+
+	apiKey := c.GetHeader("Api-Key")
+	if !h.repo.Validate(apiKey, c.Request.Method, c.FullPath()) {
+		h.logger.Errorw("Authorization failed", "path", c.FullPath(), "apiKey", apiKey)
+		handleErrorResponse(c, app_error.ErrUnauthorized)
+		return
+	}
+
+	apiDeviceOS := c.GetHeader("Api-DeviceOS")
+	if apiDeviceOS == "" {
+		handleErrorResponse(c, app_error.ErrApiDeivceOS)
 		return
 	}
 
@@ -67,53 +85,33 @@ func (h *CollectionHandler) CollectionDetail(c *gin.Context) {
 		handleErrorResponse(c, app_error.ErrService)
 		return
 	}
-
 	if err := h.validator.Struct(req); err != nil {
-    	handleErrorResponse(c, HandleValidationError(err))
-    	return
-	}
-
-	response, appErr := h.service.CollectionDetail(c, req)
-	if appErr != nil {
+		appErr := HandleValidationError(err)
 		handleErrorResponse(c, appErr)
+		if appErr.ErrorCode == "SYS500" {
+			return
+		}
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
-}
-
-// CollectionDetail
-// @Tags         Common
-// @Accept       json
-// @Produce      json
-// @Param        Api-Key              header    string                               false  "API key"
-// @Param        request              body      domain.CollectionLogRequest       false  "Body Request"
-// @Success      200  {object}        domain.CollectionLogResponse
-// @Router       /Api/Collection/CollectionLog [post]
-func (h *CollectionHandler) CollectionLog(c *gin.Context) {
-	var req domain.CollectionLogRequest
-
-	err := ValidateHeadersAndAuth(c, c.Request.Method, c.FullPath(), h.apikey, h.logger)
-	if err != nil {
-		handleErrorResponse(c, err)
+	CheckDOPAResponse := h.service.CheckDOPARequest(c, req)
+	if CheckDOPAResponse.AppError != nil {
+		handleErrorResponse(c, CheckDOPAResponse.AppError)
 		return
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		handleErrorResponse(c, app_error.ErrInternalServer)
+	appLogger.Info("Response to client",
+    zap.Any(serviceName, "Data response", CheckDOPAResponse),
+	)
+
+	var responseError *app_error.AppError
+	if  CheckDOPAResponse.DomainError != nil {
+		responseError = CheckDOPAResponse.DomainError
+	}
+	if responseError != nil {
+		handleErrorResponse(c, responseError)
 		return
 	}
 
-	if err := h.validator.Struct(req); err != nil {
-    	handleErrorResponse(c, HandleValidationError(err))
-    	return
-	}
-	
-	response, appErr := h.service.CollectionLog(c, req)
-	if appErr != nil {
-		handleErrorResponse(c, appErr)
-		return
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, CheckDOPAResponse.Response)
 }
