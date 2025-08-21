@@ -1,17 +1,18 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Server       ServerConfig           `yaml:"server"`
-	Logger       LoggerConfig           `yaml:"logger"`
-	APIKeys      []APIKeyIncoming       `yaml:"apiKeys"`
-	Destinations map[string]Destination `yaml:"destinations"`
-	Routes       map[string]Route       `yaml:"routes"`
+	Server       ServerConfig           `yaml:"server" json:"server"`
+	Logger       LoggerConfig           `yaml:"logger" json:"logger"`
+	APIKeys      []APIKey               `yaml:"apiKeys" json:"apiKeys"`
+	Destinations map[string]Destination `yaml:"destinations" json:"destinations"`
+	Routes       map[string]Route       `yaml:"routes" json:"routes"`
 }
 type ServerConfig struct {
 	Port string `yaml:"port"`
@@ -21,21 +22,27 @@ type LoggerConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
 }
-type APIKeyIncoming struct {
+type APIKey struct {
 	Key         string   `yaml:"key"`
 	ClientName  string   `yaml:"clientName"`
 	Status      string   `yaml:"status"`
 	Permissions []string `yaml:"permissions"`
 }
 type Destination struct {
-	Type   string `yaml:"type"`
-	Host   string `yaml:"host"`
-	APIKey string `yaml:"apiKey"`
+	Type   string              `json:"type"`
+	IP     string              `json:"ip"`
+	Ports  map[string][]string `json:"ports"`
+	APIKey string              `json:"apiKey"`
 }
 type Route struct {
-	System  string `yaml:"System"`
-	Service string `yaml:"Service"`
-	Format  string `yaml:"Format"`
+	System  		string `json:"System"`
+	Service 		string `json:"Service"`
+	Format  		string `json:"Format"`
+	RequestLength   string `json:"RequestLength"`
+}
+type DestinationsAndRoutes struct {
+	Destinations map[string]Destination `json:"destinations"`
+	Routes       map[string]Route       `json:"routes"`
 }
 
 func Load(path string) (*Config, error) {
@@ -48,4 +55,28 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	return &config, nil
+}
+
+func LoadAPIKeys(path string) ([]APIKey, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var apiKeys []APIKey
+	if err := json.Unmarshal(data, &apiKeys); err != nil {
+		return nil, err
+	}
+	return apiKeys, nil
+}
+
+func LoadDestinationsAndRoutes(path string) (*DestinationsAndRoutes, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var dr DestinationsAndRoutes
+	if err := json.Unmarshal(data, &dr); err != nil {
+		return nil, err
+	}
+	return &dr, nil
 }
