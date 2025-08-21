@@ -1,82 +1,56 @@
-package config
+package error
 
 import (
-	"encoding/json"
-	"os"
-
-	"gopkg.in/yaml.v3"
+	"fmt"
 )
 
-type Config struct {
-	Server       ServerConfig           `yaml:"server" json:"server"`
-	Logger       LoggerConfig           `yaml:"logger" json:"logger"`
-	APIKeys      []APIKey               `yaml:"apiKeys" json:"apiKeys"`
-	Destinations map[string]Destination `yaml:"destinations" json:"destinations"`
-	Routes       map[string]Route       `yaml:"routes" json:"routes"`
-}
-type ServerConfig struct {
-	Port string `yaml:"port"`
-	Mode string `yaml:"mode"`
-}
-type LoggerConfig struct {
-	Level  string `yaml:"level"`
-	Format string `yaml:"format"`
-}
-type APIKey struct {
-	Key         string   `yaml:"key"`
-	ClientName  string   `yaml:"clientName"`
-	Status      string   `yaml:"status"`
-	Permissions []string `yaml:"permissions"`
-}
-type Destination struct {
-	Type   string              `json:"type"`
-	IP     string              `json:"ip"`
-	Ports  map[string][]string `json:"ports"`
-	APIKey string              `json:"apiKey"`
-}
-type Route struct {
-	System  		string `json:"System"`
-	Service 		string `json:"Service"`
-	Format  		string `json:"Format"`
-	RequestLength   string `json:"RequestLength"`
-}
-type DestinationsAndRoutes struct {
-	Destinations map[string]Destination `json:"destinations"`
-	Routes       map[string]Route       `json:"routes"`
+type AppError struct {
+	StatusCode   string `json:"StatusCode,omitempty"`
+	ErrorCode    string
+	ErrorFields  string `json:"ErrorFields,omitempty"`
+	ErrorMessage string
+	Err          error  `json:"Err,omitempty"`
 }
 
-func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
+func (e *AppError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %v", e.ErrorMessage, e.Err)
 	}
-	var config Config
-	if err = yaml.Unmarshal(data, &config); err != nil {
-		return nil, err
-	}
-	return &config, nil
+	return e.ErrorMessage
+}
+func (e *AppError) Unwrap() error {
+	return e.Err
 }
 
-func LoadAPIKeys(path string) ([]APIKey, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var apiKeys []APIKey
-	if err := json.Unmarshal(data, &apiKeys); err != nil {
-		return nil, err
-	}
-	return apiKeys, nil
+func NewErrorDopaInvalid(dopaMsg string) *AppError {
+    return &AppError{
+        ErrorCode:    "COM014",
+        ErrorMessage: "Invalid Status/" + dopaMsg,
+    }
 }
 
-func LoadDestinationsAndRoutes(path string) (*DestinationsAndRoutes, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var dr DestinationsAndRoutes
-	if err := json.Unmarshal(data, &dr); err != nil {
-		return nil, err
-	}
-	return &dr, nil
+var (
+	ErrInternalServer   = &AppError{ErrorCode: "SYS500", ErrorMessage: "An unexpected internal error occurred"}
+	ErrTimeOut          = &AppError{ErrorCode: "SYS003", ErrorMessage: "System Time out"}
+	ErrUnauthorized     = &AppError{ErrorCode: "SYS002", ErrorMessage: "Unauthorized"}
+	ErrService          = &AppError{ErrorCode: "SYS001", ErrorMessage: "System unavailable"}
+	ErrDopa             = &AppError{ErrorCode: "SYS004", ErrorMessage: "DOPA Unavailable"}
+
+	ErrApiDeivceOS      = &AppError{ErrorCode: "COM034", ErrorMessage: "Invalid Api-DeviceOS"}
+	ErrApiChannel       = &AppError{ErrorCode: "COM002", ErrorMessage: "Invalid Api-Channel"}
+	ErrApiRequestID     = &AppError{ErrorCode: "COM033", ErrorMessage: "Invalid Api-RequestID"}
+	ErrRequiedParam     = &AppError{ErrorCode: "COM001", ErrorMessage: "Required Parameter"}
+
+
+)
+
+type ErrorResponseFormat struct {
+	ErrorCode    string `json:"ErrorCode"`
+	ErrorMessage string `json:"ErrorMessage"`
+}
+
+type ValidationErrorDetail struct {
+	Field        string `json:"field"`
+	Tag          string `json:"tag"`
+	Message      string `json:"message"`
 }
