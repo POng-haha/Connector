@@ -1,0 +1,308 @@
+basePath: /
+definitions:
+  domain.CollectionDetailAgreement:
+    properties:
+      AgreementNo:
+        type: string
+      AssetPrice:
+        type: number
+      BeginSUEOSHDCharge:
+        type: number
+      BeginSUEOSInterestNet:
+        type: number
+      BeginSUEOSInterestVAT:
+        type: number
+      BeginSUEOSOtherFee:
+        type: number
+      BeginSUEOSPenalty:
+        type: number
+      BeginSUEOSPrincipalNet:
+        type: number
+      BeginSUEOSPrincipalVAT:
+        type: number
+      BeginSUEOSTotal:
+        type: number
+      BlackCaseDate:
+        type: integer
+      BlackCaseNo:
+        type: string
+      BlockCode:
+        type: string
+      CourtCode:
+        type: string
+      CourtName:
+        type: string
+      CurrentSUEOSHDCharge:
+        type: number
+      CurrentSUEOSInterestNet:
+        type: number
+      CurrentSUEOSInterestVAT:
+        type: number
+      CurrentSUEOSOtherFee:
+        type: number
+      CurrentSUEOSPenalty:
+        type: number
+      CurrentSUEOSPrincipalNet:
+        type: number
+      CurrentSUEOSPrincipalVAT:
+        type: number
+      CurrentSUEOSTotal:
+        type: number
+      ExpectDate:
+        type: integer
+      InstallmentAmount:
+        type: number
+      JudgeAmount:
+        type: number
+      JudgmentDate:
+        type: integer
+      JudgmentDetail:
+        type: string
+      JudgmentResultCode:
+        type: integer
+      JudgmentResultDescription:
+        type: string
+      LastPaymentDate:
+        type: integer
+      NoOfInstallment:
+        type: string
+      OutsourceID:
+        type: string
+      OutsourceName:
+        type: string
+      RedCaseDate:
+        type: integer
+      RedCaseNo:
+        type: string
+      SUESeqNo:
+        type: integer
+      SUEStatus:
+        type: integer
+      SUEStatusDescription:
+        type: string
+      SeqOfAgreement:
+        type: integer
+      TotalCurrentPerSUESeqNo:
+        type: number
+      TotalPaymentAmount:
+        type: number
+    type: object
+  domain.CollectionDetailRequest:
+    properties:
+      BlackCaseNo:
+        maxLength: 15
+        type: string
+      IDCardNo:
+        maxLength: 20
+        type: string
+      RedCaseNo:
+        maxLength: 15
+        type: string
+    required:
+    - IDCardNo
+    type: object
+  domain.CollectionDetailResponse:
+    properties:
+      AgreementList:
+        items:
+          $ref: '#/definitions/domain.CollectionDetailAgreement'
+        type: array
+      IDCardNo:
+        type: string
+      NoOfAgreement:
+        type: integer
+    type: object
+  domain.CollectionLogRequest:
+    properties:
+      AgreementNo:
+        maxLength: 16
+        type: string
+      InputDate:
+        maxLength: 8
+        type: string
+      InputTime:
+        maxLength: 6
+        type: string
+      LogRemark1:
+        maxLength: 120
+        type: string
+      LogRemark2:
+        maxLength: 120
+        type: string
+      LogRemark3:
+        maxLength: 120
+        type: string
+      LogRemark4:
+        maxLength: 120
+        type: string
+      LogRemark5:
+        maxLength: 120
+        type: string
+      OperatorID:
+        maxLength: 15
+        type: string
+      RemarkCode:
+        maxLength: 4
+        type: string
+    required:
+    - AgreementNo
+    - InputDate
+    - InputTime
+    - OperatorID
+    - RemarkCode
+    type: object
+  domain.CollectionLogResponse:
+    properties:
+      AgreementNo:
+        type: string
+      IDCardNo:
+        type: string
+    type: object
+  domain.UpdateStatusRequest:
+    properties:
+      AEONID:
+        maxLength: 20
+        type: string
+      Agreement:
+        maximum: 999999999999
+        type: integer
+      Status:
+        maxLength: 1
+        type: string
+    required:
+    - AEONID
+    - Agreement
+    - Status
+    type: object
+  domain.UpdateStatusResponse:
+    properties:
+      AEONID:
+        maxLength: 20
+        type: string
+      Agreement:
+        maximum: 999999999999
+        type: integer
+    type: object
+host: 10.254.97.103:8082
+info:
+  contact:
+    email: sye@aeon.co.th
+    name: SYE
+    url: https://aeon.co.th
+  description: This is the API Gateway for ConnectorAPI.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Connector API Gateway
+  version: "1.0"
+paths:
+  /Api/Agreement/UpdateStatus:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: API key
+        in: header
+        name: Api-Key
+        type: string
+      - description: DeviceOS
+        in: header
+        name: Api-DeviceOS
+        type: string
+      - description: Channel
+        in: header
+        name: Api-Channel
+        type: string
+      - description: RequestID
+        in: header
+        name: Api-RequestID
+        type: string
+      - description: BodyRequest
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/domain.UpdateStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.UpdateStatusResponse'
+      tags:
+      - Agreement
+  /Api/Collection/CollectionDetail:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: API key
+        in: header
+        name: Api-Key
+        type: string
+      - description: DeviceOS
+        in: header
+        name: Api-DeviceOS
+        type: string
+      - description: Channel
+        in: header
+        name: Api-Channel
+        type: string
+      - description: RequestID
+        in: header
+        name: Api-RequestID
+        type: string
+      - description: Body Request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/domain.CollectionDetailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CollectionDetailResponse'
+      tags:
+      - Collection
+  /Api/Collection/CollectionLog:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: API key
+        in: header
+        name: Api-Key
+        type: string
+      - description: DeviceOS
+        in: header
+        name: Api-DeviceOS
+        type: string
+      - description: Channel
+        in: header
+        name: Api-Channel
+        type: string
+      - description: RequestID
+        in: header
+        name: Api-RequestID
+        type: string
+      - description: Body Request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/domain.CollectionLogRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.CollectionLogResponse'
+      tags:
+      - Collection
+schemes:
+- http
+- https
+swagger: "2.0"
