@@ -12,6 +12,7 @@
 
 // @host            localhost:8080
 // @BasePath        /api
+//https://chirawatk:glpat-zxPDUr3atPqLMzugELYf@gitlab-devsecops.aeonth.com/aeon/sye/vm/connectorapi.git
 
 package main
 
